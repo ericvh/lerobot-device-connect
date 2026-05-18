@@ -11,7 +11,7 @@ requires-python = ">=3.12,<3.14"
 license = { text = "Apache-2.0" }
 dependencies = [
   "device-connect-edge>=0.2.2",
-  "lerobot>=0.5.0",
+  "lerobot[lekiwi]>=0.5.0",
   "numpy>=1.26",
   "opencv-python-headless>=4.8",
 ]

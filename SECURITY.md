@@ -106,7 +106,7 @@ suggested mitigation if you have one.
 | `get_observation` | Scalar joints / velocities | Information disclosure of robot state |
 | `get_observation_with_cameras` | Scalars + base64 JPEG | Privacy; large payloads (broker DoS) |
 | `stop_base` | Zero base velocities | Safety-relevant; should not be the only guard |
-| `state_update` (event) | ~10 Hz scalar stream | Ongoing disclosure to all mesh subscribers |
+| `state_update` (event) | Scalar stream on change (polled at `LEROBOT_STATE_HZ`) | Disclosure to mesh subscribers when joints/base move |
 | `get_features` / `get_status` | Schema and connectivity | Reconnaissance |
 
 Unlike reachy-mini-driver, this package **does not** implement numeric clamps on

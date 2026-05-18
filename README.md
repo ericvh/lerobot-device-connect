@@ -39,12 +39,14 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-For local LeRobot development:
+For local LeRobot development (includes Feetech motor SDK for on-robot mode):
 
 ```bash
-pip install -e "../lerobot"
+pip install -e "../lerobot[lekiwi]"
 pip install -e .
 ```
+
+**Calibration** on the robot is read from `~/{{hostname}}.json` when that file exists (e.g. `~/dum-e.json` on host `dum-e`). Otherwise LeRobot uses `~/.cache/huggingface/lerobot/calibration/robots/lekiwi/{{robot-id}}.json`. Override with `--robot-id` / `--calibration-dir` or `LEROBOT_ROBOT_ID` / `LEROBOT_CALIBRATION_DIR`.
 
 ## Quick start
 
@@ -57,7 +59,7 @@ lerobot-device-connect --sim --allow-insecure
 **On-robot (LeKiwi host):**
 
 ```bash
-# On the Pi — expose motors + cameras
+# On the Pi — expose motors + cameras (uses ~/dum-e.json when hostname is dum-e)
 lerobot-device-connect \
   --robot-mode local \
   --robot-port /dev/ttyACM0 \
@@ -99,7 +101,7 @@ lerobot-device-connect --portal --portal-credentials ~/Downloads/your-creds.json
 | `teleop_step`                  | One teleop cycle (leader + keyboard) |
 
 
-Events: `state_update` (~10 Hz), `emergency_stop`.
+Events: `state_update` (on scalar change; polled at `LEROBOT_STATE_HZ`), `emergency_stop`.
 
 ## Environment variables
 
@@ -107,6 +109,8 @@ Events: `state_update` (~10 Hz), `emergency_stop`.
 | Variable                     | Default        | Meaning                        |
 | ---------------------------- | -------------- | ------------------------------ |
 | `LEROBOT_ROBOT_MODE`         | `local`        | `local`, `client`, or `sim`    |
+| `LEROBOT_ROBOT_ID`           | hostname       | Calibration file stem (`dum-e` → `~/dum-e.json`) |
+| `LEROBOT_CALIBRATION_DIR`    | `~` if `~/{{id}}.json` exists | Directory for `{id}.json` |
 | `LEROBOT_REMOTE_IP`          | —              | Robot IP for client mode       |
 | `LEROBOT_ROBOT_PORT`         | `/dev/ttyACM0` | Feetech port (local mode)      |
 | `LEROBOT_TELEOP_LEADER_PORT` | —              | Enable leader teleop           |

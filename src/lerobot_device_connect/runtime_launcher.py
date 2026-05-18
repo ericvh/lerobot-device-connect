@@ -11,10 +11,14 @@ from dataclasses import dataclass
 
 from device_connect_edge import DeviceRuntime
 
+from pathlib import Path
+
 from lerobot_device_connect.config import (
     DriverConfig,
     PortalCredentials,
     apply_portal_config,
+    default_calibration_dir,
+    default_robot_id,
     load_portal_credentials,
     resolve_portal_credentials_file,
 )
@@ -44,10 +48,17 @@ def log_run_config(params: DeviceConnectRunParams) -> None:
         cfg.portal,
         cfg.robot_mode,
     )
+    calibration = cfg.calibration_dir or default_calibration_dir(cfg.robot_id)
+    calibration_path = (
+        Path(calibration) / f"{cfg.robot_id}.json"
+        if calibration
+        else f"(lerobot default, id={cfg.robot_id})"
+    )
     logger.info(
-        "robot_id=%s port=%s remote_ip=%s leader_port=%s keyboard=%s",
+        "robot_id=%s port=%s calibration=%s remote_ip=%s leader_port=%s keyboard=%s",
         cfg.robot_id,
         cfg.robot_port,
+        calibration_path,
         cfg.remote_ip or "(n/a)",
         cfg.leader_port or "(none)",
         cfg.enable_keyboard_teleop,
@@ -85,12 +96,19 @@ def gather_cli_run_params(args: Namespace) -> DeviceConnectRunParams:
     if args.sim:
         robot_mode = "sim"
 
+    robot_id = args.robot_id or env.robot_id or default_robot_id()
+    calibration_dir = args.calibration_dir or env.calibration_dir
+    if calibration_dir is None:
+        auto_dir = default_calibration_dir(robot_id)
+        calibration_dir = str(auto_dir) if auto_dir else None
+
     config = DriverConfig(
         device_id=args.device_id or env.device_id,
         tenant=args.tenant or env.tenant,
         robot_mode=robot_mode,
-        robot_id=args.robot_id or env.robot_id,
+        robot_id=robot_id,
         robot_port=args.robot_port or env.robot_port,
+        calibration_dir=calibration_dir,
         remote_ip=args.remote_ip or env.remote_ip,
         leader_port=args.leader_port or env.leader_port,
         enable_keyboard_teleop=args.keyboard_teleop or env.enable_keyboard_teleop,
@@ -132,11 +150,13 @@ async def run_device_connect(params: DeviceConnectRunParams) -> None:
     if cfg.discovery_mode:
         os.environ.setdefault("DEVICE_CONNECT_DISCOVERY_MODE", cfg.discovery_mode)
 
+    calibration_dir = Path(cfg.calibration_dir) if cfg.calibration_dir else None
     robot = build_robot_bridge(
         mode=cfg.robot_mode,
         robot_id=cfg.robot_id,
         port=cfg.robot_port,
         remote_ip=cfg.remote_ip,
+        calibration_dir=calibration_dir,
     )
     teleop = _build_teleop(cfg)
     driver = LeRobotDeviceDriver(

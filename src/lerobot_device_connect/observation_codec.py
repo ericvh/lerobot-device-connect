@@ -29,6 +29,25 @@ def scalar_observation(observation: dict[str, Any]) -> dict[str, float | int | s
     return result
 
 
+def scalars_changed(
+    before: dict[str, float | int | str],
+    after: dict[str, float | int | str],
+    *,
+    float_eps: float = 1e-4,
+) -> bool:
+    """Return True when scalar observation dicts differ (for coalesced event emission)."""
+    if before.keys() != after.keys():
+        return True
+    for key, new_value in after.items():
+        old_value = before[key]
+        if isinstance(new_value, float) or isinstance(old_value, float):
+            if abs(float(new_value) - float(old_value)) > float_eps:
+                return True
+        elif new_value != old_value:
+            return True
+    return False
+
+
 def encode_camera_frame(frame: np.ndarray, *, jpeg_quality: int = 85) -> dict[str, Any]:
     """Encode an OpenCV BGR frame as a base64 JPEG."""
     ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])

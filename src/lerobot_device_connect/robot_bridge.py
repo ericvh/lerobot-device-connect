@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
+
+from lerobot_device_connect.config import default_calibration_dir
 
 from lerobot.types import RobotAction, RobotObservation
 
@@ -57,12 +60,20 @@ class LeKiwiLocalBridge:
 
     port: str = "/dev/ttyACM0"
     robot_id: str = "lekiwi"
+    calibration_dir: Path | None = None
     robot_kind: str = "lekiwi"
 
     def __post_init__(self) -> None:
         from lerobot.robots.lekiwi import LeKiwi, LeKiwiConfig
 
-        self._robot = LeKiwi(LeKiwiConfig(port=self.port, id=self.robot_id))
+        calibration_dir = self.calibration_dir or default_calibration_dir(self.robot_id)
+        self._robot = LeKiwi(
+            LeKiwiConfig(
+                port=self.port,
+                id=self.robot_id,
+                calibration_dir=calibration_dir,
+            )
+        )
 
     @property
     def is_connected(self) -> bool:
@@ -208,13 +219,18 @@ def build_robot_bridge(
     robot_id: str,
     port: str | None = None,
     remote_ip: str | None = None,
+    calibration_dir: Path | None = None,
 ) -> RobotBridge:
     """Factory for supported robot bridge modes."""
     normalized = mode.strip().lower()
     if normalized in {"sim", "simulate", "simulated"}:
         return SimLeKiwiBridge(robot_id=robot_id or "lekiwi-sim")
     if normalized in {"local", "lekiwi", "lekiwi_local", "host"}:
-        return LeKiwiLocalBridge(port=port or "/dev/ttyACM0", robot_id=robot_id)
+        return LeKiwiLocalBridge(
+            port=port or "/dev/ttyACM0",
+            robot_id=robot_id,
+            calibration_dir=calibration_dir,
+        )
     if normalized in {"client", "lekiwi_client", "remote"}:
         if not remote_ip:
             raise ValueError("remote_ip is required for lekiwi client mode")

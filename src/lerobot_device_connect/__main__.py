@@ -22,7 +22,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Robot bridge: sim, local (on-robot LeKiwi), or client (ZMQ to lekiwi_host).",
     )
     parser.add_argument("--sim", action="store_true", help="Use simulated LeKiwi (no hardware).")
-    parser.add_argument("--robot-id", default=None)
+    parser.add_argument(
+        "--robot-id",
+        default=None,
+        help="LeRobot robot id (default: hostname, e.g. dum-e for ~/dum-e.json calibration).",
+    )
+    parser.add_argument(
+        "--calibration-dir",
+        default=None,
+        help="Directory containing {robot-id}.json (default: ~ when ~/{{robot-id}}.json exists).",
+    )
     parser.add_argument("--robot-port", default=None, help="Feetech bus port for local LeKiwi.")
     parser.add_argument("--remote-ip", default=None, help="Robot IP for LeKiwi client mode.")
     parser.add_argument(

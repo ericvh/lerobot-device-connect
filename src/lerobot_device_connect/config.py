@@ -4,8 +4,20 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+import socket
+from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def default_robot_id() -> str:
+    """Hostname stem (e.g. ``dum-e``), matching per-device calibration ``~/dum-e.json``."""
+    return socket.gethostname().split(".", maxsplit=1)[0]
+
+
+def default_calibration_dir(robot_id: str) -> Path | None:
+    """Use ``~/{{robot_id}}.json`` when present; otherwise LeRobot's HF cache layout."""
+    home_calibration = Path.home() / f"{robot_id}.json"
+    return Path.home() if home_calibration.is_file() else None
 
 PORTAL_NATS_URL = "nats://portal.deviceconnect.dev:4222"
 DEFAULT_PORTAL_CREDENTIALS_GLOB = "erivan01*.json"
@@ -25,8 +37,9 @@ class DriverConfig:
     device_id: str = "lekiwi-1"
     tenant: str = "default"
     robot_mode: str = "local"
-    robot_id: str = "lekiwi"
+    robot_id: str = field(default_factory=default_robot_id)
     robot_port: str = "/dev/ttyACM0"
+    calibration_dir: str | None = None
     remote_ip: str | None = None
     leader_port: str | None = None
     enable_keyboard_teleop: bool = False
@@ -48,12 +61,18 @@ class DriverConfig:
             if url.strip()
         )
         allow_insecure = os.environ.get("DEVICE_CONNECT_ALLOW_INSECURE", "").lower()
+        robot_id = os.environ.get("LEROBOT_ROBOT_ID", default_robot_id())
+        calibration_dir = os.environ.get("LEROBOT_CALIBRATION_DIR") or None
+        if calibration_dir is None:
+            auto_dir = default_calibration_dir(robot_id)
+            calibration_dir = str(auto_dir) if auto_dir else None
         return cls(
             device_id=os.environ.get("DEVICE_ID", os.environ.get("LEROBOT_DEVICE_ID", "lekiwi-1")),
             tenant=os.environ.get("TENANT", os.environ.get("LEROBOT_TENANT", "default")),
             robot_mode=os.environ.get("LEROBOT_ROBOT_MODE", "local"),
-            robot_id=os.environ.get("LEROBOT_ROBOT_ID", "lekiwi"),
+            robot_id=robot_id,
             robot_port=os.environ.get("LEROBOT_ROBOT_PORT", "/dev/ttyACM0"),
+            calibration_dir=calibration_dir,
             remote_ip=os.environ.get("LEROBOT_REMOTE_IP") or None,
             leader_port=os.environ.get("LEROBOT_TELEOP_LEADER_PORT") or None,
             enable_keyboard_teleop=_truthy(os.environ.get("LEROBOT_TELEOP_KEYBOARD", "")),
@@ -137,6 +156,7 @@ def apply_portal_config(
         robot_mode=config.robot_mode,
         robot_id=config.robot_id,
         robot_port=config.robot_port,
+        calibration_dir=config.calibration_dir,
         remote_ip=config.remote_ip,
         leader_port=config.leader_port,
         enable_keyboard_teleop=config.enable_keyboard_teleop,

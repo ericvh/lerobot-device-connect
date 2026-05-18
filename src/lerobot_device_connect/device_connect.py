@@ -10,7 +10,11 @@ from typing import Any
 from device_connect_edge.drivers import DeviceDriver, emit, periodic, rpc
 from device_connect_edge.types import DeviceIdentity, DeviceStatus
 
-from lerobot_device_connect.observation_codec import observation_with_cameras, scalar_observation
+from lerobot_device_connect.observation_codec import (
+    observation_with_cameras,
+    scalar_observation,
+    scalars_changed,
+)
 from lerobot_device_connect.robot_bridge import RobotBridge
 from lerobot_device_connect.teleop import TeleopComposer, TeleopConfig
 
@@ -34,6 +38,7 @@ class LeRobotDeviceDriver(DeviceDriver):
         self.teleop = teleop
         self.state_publish_hz = state_publish_hz
         self._last_scalars: dict[str, float | int | str] = {}
+        self._last_emitted_scalars: dict[str, float | int | str] = {}
         self._hw_connected = False
 
     @property
@@ -70,6 +75,7 @@ class LeRobotDeviceDriver(DeviceDriver):
             await asyncio.to_thread(self.teleop.disconnect)
         await asyncio.to_thread(self.robot.disconnect)
         self._hw_connected = False
+        self._last_emitted_scalars = {}
         logger.info("LeRobot driver disconnected")
 
     @rpc()
@@ -162,17 +168,20 @@ class LeRobotDeviceDriver(DeviceDriver):
 
     @periodic(interval=0.1, wait_for_completion=True)
     async def _publish_state(self) -> None:
-        """Publish scalar state (~10 Hz) when connected."""
+        """Poll scalar state at ~10 Hz; emit only when values change."""
         if not self._hw_connected or not self.robot.is_connected:
             return
         obs = await asyncio.to_thread(self.robot.get_observation)
         scalars = scalar_observation(obs)
         self._last_scalars = scalars
+        if not scalars_changed(self._last_emitted_scalars, scalars):
+            return
+        self._last_emitted_scalars = dict(scalars)
         await self.state_update(**scalars)
 
     @emit()
     async def state_update(self, **joints: float):
-        """Periodic scalar joint/base state update."""
+        """Scalar joint/base state update (emitted on change only)."""
         pass
 
     @emit()
