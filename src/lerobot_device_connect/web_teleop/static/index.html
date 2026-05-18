@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LeRobot Web Teleop</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>LeRobot Web Teleop</h1>
+    <p id="status-line">Connecting…</p>
+  </header>
+
+  <main>
+    <section class="cameras" aria-label="Camera feeds">
+      <div class="camera-panel" id="panel-front">
+        <h2>Front</h2>
+        <img id="cam-front" alt="Front camera" hidden />
+        <p class="cam-placeholder">No front camera</p>
+      </div>
+      <div class="camera-panel" id="panel-wrist">
+        <h2>Wrist</h2>
+        <img id="cam-wrist" alt="Wrist camera" hidden />
+        <p class="cam-placeholder">No wrist camera</p>
+      </div>
+    </section>
+
+    <section class="controls">
+      <div class="panel base-panel" aria-label="Base drive">
+        <h2>Base</h2>
+        <p class="hint">Hold buttons or use WASD + Q/E to drive. Release to stop.</p>
+        <div class="speed-row">
+          <span>Speed</span>
+          <button type="button" data-speed="0">Slow</button>
+          <button type="button" data-speed="1">Medium</button>
+          <button type="button" data-speed="2">Fast</button>
+        </div>
+        <div class="dpad">
+          <button type="button" class="drive" data-dir="forward">▲</button>
+          <button type="button" class="drive" data-dir="left">◀</button>
+          <button type="button" class="drive stop" data-dir="stop">■</button>
+          <button type="button" class="drive" data-dir="right">▶</button>
+          <button type="button" class="drive" data-dir="backward">▼</button>
+          <button type="button" class="drive" data-dir="rotate_left">↺</button>
+          <button type="button" class="drive" data-dir="rotate_right">↻</button>
+        </div>
+      </div>
+
+      <div class="panel arm-panel" aria-label="Arm joints">
+        <h2>Arm</h2>
+        <p class="hint">Sliders set goal positions. ± nudges by a small step.</p>
+        <div id="arm-sliders"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

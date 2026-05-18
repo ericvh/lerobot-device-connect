@@ -1,0 +1,233 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --border: #2d3a4f;
+  --text: #e7ecf3;
+  --muted: #8b9cb3;
+  --accent: #3d8bfd;
+  --accent-hover: #5ca0ff;
+  --danger: #e85d5d;
+  --success: #3dd68c;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+#status-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+main {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@media (min-width: 960px) {
+  main {
+    grid-template-columns: 1fr 380px;
+    align-items: start;
+  }
+}
+
+.cameras {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.camera-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.camera-panel h2 {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.camera-panel img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 180px;
+  object-fit: contain;
+  background: #000;
+}
+
+.cam-placeholder {
+  margin: 0;
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.speed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.speed-row span {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #243044;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+button:hover {
+  background: #2f3f56;
+  border-color: var(--accent);
+}
+
+button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.drive:active,
+button.drive.pressed {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.stop {
+  background: #3a2830;
+  border-color: var(--danger);
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  max-width: 280px;
+}
+
+.dpad .drive:nth-child(1) {
+  grid-column: 2;
+}
+
+.dpad .drive:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.dpad .drive.stop {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.dpad .drive:nth-child(4) {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.dpad .drive:nth-child(5) {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.dpad .drive:nth-child(6) {
+  grid-column: 1;
+  grid-row: 4;
+}
+
+.dpad .drive:nth-child(7) {
+  grid-column: 3;
+  grid-row: 4;
+}
+
+.arm-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.arm-row label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.arm-row input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.arm-row .value {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 3rem;
+  text-align: right;
+}
+
+.arm-row .nudge {
+  padding: 0.25rem 0.5rem;
+  min-width: 2rem;
+}

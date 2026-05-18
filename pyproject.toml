@@ -21,9 +21,15 @@ dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
 ]
+web = [
+  "fastapi>=0.115",
+  "nkeys>=0.2",
+  "uvicorn[standard]>=0.32",
+]
 
 [project.scripts]
 lerobot-device-connect = "lerobot_device_connect.__main__:main"
+lerobot-web-teleop = "lerobot_device_connect.web_teleop.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

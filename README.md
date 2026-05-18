@@ -136,6 +136,48 @@ Events: `state_update` (on scalar change; polled at `LEROBOT_STATE_HZ`), `emerge
 | `TENANT`                     | `default`      | Tenant                         |
 
 
+## Web teleop (test UI)
+
+Browser UI with live camera streams (MJPEG), WASD base drive, and arm sliders.
+By default it controls a robot over **Device Connect** (same RPCs as
+`lerobot-device-connect` on the mesh). Use `--direct` only for local/in-process
+testing without a broker.
+
+**1. Start the robot driver on the Pi (or sim):**
+
+```bash
+lerobot-device-connect --robot-mode local --device-id my-lekiwi --allow-insecure
+# or portal:
+lerobot-device-connect --portal --portal-credentials ~/Downloads/your-creds.json
+```
+
+**2. Run the web UI (laptop or Pi) against that device id:**
+
+```bash
+pip install -e ".[web]"
+lerobot-web-teleop \
+  --portal \
+  --portal-credentials ~/Downloads/your-creds.json \
+  --target-device-id my-lekiwi \
+  --host 0.0.0.0 --port 8080
+```
+
+`--target-device-id` must match the robot's `lerobot-device-connect --device-id`.
+Your portal credentials are for **mesh access**; the target id is the **robot**.
+
+Environment alternatives: `LEROBOT_TARGET_DEVICE_ID`, `NATS_CREDENTIALS_FILE`,
+`TENANT`, `MESSAGING_URLS` (same as the main driver).
+
+**Direct / in-process mode** (no Device Connect broker):
+
+```bash
+lerobot-web-teleop --direct --sim
+lerobot-web-teleop --direct --robot-mode local --robot-port /dev/ttyACM0
+```
+
+Open `http://<host>:8080/`. The HTTP server has **no authentication** — lab /
+trusted network only.
+
 ## Tests
 
 ```bash
