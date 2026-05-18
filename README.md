@@ -98,6 +98,17 @@ lerobot-device-connect --portal --portal-credentials ~/Downloads/your-creds.json
 | `get_observation_with_cameras` | Scalars + JPEG camera frames         |
 | `send_action`                  | Motor-space action dict              |
 | `stop_base`                    | Zero omniwheel velocities            |
+| `get_base_teleop_config`       | Base drive directions and speed tiers |
+| `set_base_speed_level`         | Set speed tier (0=slow … 2=fast)     |
+| `base_speed_up` / `base_speed_down` | Adjust speed tier               |
+| `set_base_velocity`            | Direct `x.vel` / `y.vel` / `theta.vel` |
+| `drive_base`                   | One teleop direction (`forward`, etc.) |
+| `drive_base_keys`              | Multiple directions (e.g. forward+left) |
+| `list_cameras`                 | Camera names, V4L2 paths, ALSA devices |
+| `get_camera_video`             | JPEG frame from `front` or `wrist`   |
+| `get_cameras_video`            | JPEG frames from all cameras         |
+| `get_camera_audio`             | Short WAV clip from camera mic       |
+| `get_cameras_audio`            | WAV clips from all camera mics       |
 | `teleop_step`                  | One teleop cycle (leader + keyboard) |
 
 
@@ -115,6 +126,7 @@ Events: `state_update` (on scalar change; polled at `LEROBOT_STATE_HZ`), `emerge
 | `LEROBOT_ROBOT_PORT`         | `/dev/ttyACM0` | Feetech port (local mode)      |
 | `LEROBOT_TELEOP_LEADER_PORT` | —              | Enable leader teleop           |
 | `LEROBOT_TELEOP_KEYBOARD`    | —              | `1` / `true` for keyboard base |
+| `LEROBOT_CAMERA_AUDIO_ALSA`  | —              | JSON map, e.g. `{"front":"hw:2,0","wrist":"hw:3,0"}` |
 | `DEVICE_ID`                  | `lekiwi-1`     | Device Connect device id       |
 | `TENANT`                     | `default`      | Tenant                         |
 

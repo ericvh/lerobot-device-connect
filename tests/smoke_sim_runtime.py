@@ -19,6 +19,18 @@ REQUIRED_FUNCTIONS = {
     "send_action",
     "stop_base",
     "teleop_step",
+    "get_base_teleop_config",
+    "set_base_speed_level",
+    "base_speed_up",
+    "base_speed_down",
+    "set_base_velocity",
+    "drive_base",
+    "drive_base_keys",
+    "list_cameras",
+    "get_camera_video",
+    "get_cameras_video",
+    "get_camera_audio",
+    "get_cameras_audio",
 }
 
 REQUIRED_EVENTS = {"state_update", "emergency_stop"}

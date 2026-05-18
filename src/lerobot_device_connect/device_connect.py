@@ -3,13 +3,28 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
 from device_connect_edge.drivers import DeviceDriver, emit, periodic, rpc
 from device_connect_edge.types import DeviceIdentity, DeviceStatus
 
+from lerobot_device_connect.base_teleop import (
+    BASE_DIRECTIONS,
+    DEFAULT_SPEED_LEVELS,
+    base_teleop_config,
+    base_velocity_for_directions,
+    clamp_speed_index,
+)
+from lerobot_device_connect.camera_media import (
+    capture_alsa_audio,
+    encode_all_cameras_from_observation,
+    encode_camera_from_observation,
+    resolve_camera_audio_devices,
+)
 from lerobot_device_connect.observation_codec import (
     observation_with_cameras,
     scalar_observation,
@@ -40,6 +55,8 @@ class LeRobotDeviceDriver(DeviceDriver):
         self._last_scalars: dict[str, float | int | str] = {}
         self._last_emitted_scalars: dict[str, float | int | str] = {}
         self._hw_connected = False
+        self._base_speed_index = 0
+        self._audio_device_overrides = _load_audio_device_overrides()
 
     @property
     def identity(self) -> DeviceIdentity:
@@ -138,6 +155,203 @@ class LeRobotDeviceDriver(DeviceDriver):
         return {"status": "success"}
 
     @rpc()
+    async def get_base_teleop_config(self) -> dict[str, Any]:
+        """Return base drive directions and speed levels (keyboard teleop semantics)."""
+        return {
+            "status": "success",
+            **base_teleop_config(speed_index=self._base_speed_index),
+        }
+
+    @rpc()
+    async def set_base_speed_level(self, level: int) -> dict[str, Any]:
+        """Set base speed tier (0=slow, 1=medium, 2=fast)."""
+        self._base_speed_index = clamp_speed_index(level, num_levels=len(DEFAULT_SPEED_LEVELS))
+        return {
+            "status": "success",
+            "speed_index": self._base_speed_index,
+            "speed": dict(DEFAULT_SPEED_LEVELS[self._base_speed_index]),
+        }
+
+    @rpc()
+    async def base_speed_up(self) -> dict[str, Any]:
+        """Increase base speed tier (capped at fast)."""
+        return await self.set_base_speed_level(self._base_speed_index + 1)
+
+    @rpc()
+    async def base_speed_down(self) -> dict[str, Any]:
+        """Decrease base speed tier (capped at slow)."""
+        return await self.set_base_speed_level(self._base_speed_index - 1)
+
+    @rpc()
+    async def set_base_velocity(
+        self,
+        x_vel: float = 0.0,
+        y_vel: float = 0.0,
+        theta_vel: float = 0.0,
+    ) -> dict[str, Any]:
+        """Set omniwheel body velocities directly (m/s, m/s, deg/s)."""
+        sent = await asyncio.to_thread(
+            self._send_base_velocity,
+            float(x_vel),
+            float(y_vel),
+            float(theta_vel),
+        )
+        return {"status": "success", "action_sent": scalar_observation(sent)}
+
+    @rpc()
+    async def drive_base(self, direction: str) -> dict[str, Any]:
+        """Drive base in one teleop direction (forward, backward, left, right, rotate_*, stop)."""
+        normalized = direction.strip().lower()
+        if normalized not in BASE_DIRECTIONS:
+            return {
+                "status": "error",
+                "reason": f"invalid direction {direction!r}; use one of {sorted(BASE_DIRECTIONS)}",
+            }
+        if normalized == "stop":
+            await asyncio.to_thread(self.robot.stop_base)
+            return {"status": "success", "action_sent": {"x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0}}
+        action = base_velocity_for_directions(
+            {normalized},
+            speed_index=self._base_speed_index,
+        )
+        sent = await asyncio.to_thread(
+            self._send_base_velocity,
+            action["x.vel"],
+            action["y.vel"],
+            action["theta.vel"],
+        )
+        return {
+            "status": "success",
+            "direction": normalized,
+            "speed_index": self._base_speed_index,
+            "action_sent": scalar_observation(sent),
+        }
+
+    @rpc()
+    async def drive_base_keys(self, keys: list[str]) -> dict[str, Any]:
+        """Drive base using multiple teleop directions at once (e.g. forward + left)."""
+        directions = {key.strip().lower() for key in keys if key.strip()}
+        unknown = directions - BASE_DIRECTIONS
+        if unknown:
+            return {
+                "status": "error",
+                "reason": f"invalid directions {sorted(unknown)}; use {sorted(BASE_DIRECTIONS)}",
+            }
+        if "stop" in directions or not directions:
+            await asyncio.to_thread(self.robot.stop_base)
+            return {"status": "success", "action_sent": {"x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0}}
+        action = base_velocity_for_directions(directions, speed_index=self._base_speed_index)
+        sent = await asyncio.to_thread(
+            self._send_base_velocity,
+            action["x.vel"],
+            action["y.vel"],
+            action["theta.vel"],
+        )
+        return {
+            "status": "success",
+            "directions": sorted(directions),
+            "speed_index": self._base_speed_index,
+            "action_sent": scalar_observation(sent),
+        }
+
+    @rpc()
+    async def list_cameras(self) -> dict[str, Any]:
+        """List camera names and V4L2 device paths when available."""
+        names = self.robot.list_cameras()
+        paths = self.robot.camera_video_paths()
+        audio = resolve_camera_audio_devices(paths, overrides=self._audio_device_overrides)
+        return {
+            "status": "success",
+            "cameras": names,
+            "video_paths": {name: str(paths[name]) for name in names if name in paths},
+            "audio_devices": {name: audio.get(name) for name in names},
+        }
+
+    @rpc()
+    async def get_camera_video(self, camera: str, jpeg_quality: int = 85) -> dict[str, Any]:
+        """Return a single JPEG-encoded frame from *camera* (``front`` or ``wrist``)."""
+        obs = await asyncio.to_thread(self.robot.get_observation)
+        return encode_camera_from_observation(obs, camera, jpeg_quality=jpeg_quality)
+
+    @rpc()
+    async def get_cameras_video(self, jpeg_quality: int = 85) -> dict[str, Any]:
+        """Return JPEG-encoded frames from all configured cameras."""
+        obs = await asyncio.to_thread(self.robot.get_observation)
+        return encode_all_cameras_from_observation(
+            obs,
+            camera_names=self.robot.list_cameras(),
+            jpeg_quality=jpeg_quality,
+        )
+
+    @rpc()
+    async def get_camera_audio(
+        self,
+        camera: str,
+        duration_ms: int = 500,
+        sample_rate: int = 16000,
+    ) -> dict[str, Any]:
+        """Capture a short WAV clip from the microphone paired with *camera*."""
+        paths = self.robot.camera_video_paths()
+        if camera not in paths:
+            return {"status": "error", "reason": f"unknown camera {camera!r}"}
+        audio_devices = resolve_camera_audio_devices(
+            paths,
+            overrides=self._audio_device_overrides,
+        )
+        alsa_device = audio_devices.get(camera)
+        if not alsa_device:
+            return {
+                "status": "error",
+                "reason": (
+                    f"no ALSA device for camera {camera!r}; set LEROBOT_CAMERA_AUDIO_ALSA "
+                    'e.g. {"front":"hw:2,0","wrist":"hw:3,0"}'
+                ),
+            }
+        result = await asyncio.to_thread(
+            capture_alsa_audio,
+            alsa_device,
+            duration_ms=duration_ms,
+            sample_rate=sample_rate,
+        )
+        if result.get("status") == "success":
+            result["camera"] = camera
+        return result
+
+    @rpc()
+    async def get_cameras_audio(
+        self,
+        duration_ms: int = 500,
+        sample_rate: int = 16000,
+    ) -> dict[str, Any]:
+        """Capture short WAV clips from all camera-associated microphones."""
+        paths = self.robot.camera_video_paths()
+        audio_devices = resolve_camera_audio_devices(
+            paths,
+            overrides=self._audio_device_overrides,
+        )
+        audio: dict[str, Any] = {}
+        errors: list[str] = []
+        for camera in self.robot.list_cameras():
+            alsa_device = audio_devices.get(camera)
+            if not alsa_device:
+                errors.append(f"{camera}: no ALSA device")
+                continue
+            result = await asyncio.to_thread(
+                capture_alsa_audio,
+                alsa_device,
+                duration_ms=duration_ms,
+                sample_rate=sample_rate,
+            )
+            if result.get("status") == "success":
+                audio[camera] = {k: v for k, v in result.items() if k != "status"}
+            else:
+                errors.append(f"{camera}: {result.get('reason', 'capture failed')}")
+        payload: dict[str, Any] = {"status": "success", "audio": audio}
+        if errors:
+            payload["errors"] = errors
+        return payload
+
+    @rpc()
     async def teleop_step(self) -> dict[str, Any]:
         """Run one teleop cycle: observe, compose leader/keyboard action, send.
 
@@ -188,3 +402,27 @@ class LeRobotDeviceDriver(DeviceDriver):
     async def emergency_stop(self, reason: str = ""):
         """Emitted when motion is halted for safety."""
         pass
+
+    def _send_base_velocity(self, x_vel: float, y_vel: float, theta_vel: float) -> dict[str, float]:
+        """Thread-safe base motion (holds arm pose on local LeKiwi)."""
+        send_base = getattr(self.robot, "send_base_velocity", None)
+        if callable(send_base):
+            return send_base(x_vel, y_vel, theta_vel)
+        return self.robot.send_action(
+            {"x.vel": x_vel, "y.vel": y_vel, "theta.vel": theta_vel},
+        )
+
+
+def _load_audio_device_overrides() -> dict[str, str]:
+    raw = os.environ.get("LEROBOT_CAMERA_AUDIO_ALSA", "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Ignoring invalid LEROBOT_CAMERA_AUDIO_ALSA (not JSON): %s", raw)
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning("Ignoring LEROBOT_CAMERA_AUDIO_ALSA: expected JSON object")
+        return {}
+    return {str(k): str(v) for k, v in parsed.items()}

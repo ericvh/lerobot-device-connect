@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from lerobot_device_connect.camera_media import camera_names_from_features
 from lerobot_device_connect.config import default_calibration_dir
 
 from lerobot.types import RobotAction, RobotObservation
@@ -38,6 +40,10 @@ class RobotBridge(Protocol):
 
     def stop_base(self) -> None: ...
 
+    def list_cameras(self) -> list[str]: ...
+
+    def camera_video_paths(self) -> dict[str, str | int]: ...
+
 
 def _feature_schema(features: dict[str, Any]) -> dict[str, str]:
     """Convert LeRobot feature maps to JSON-schema-like type names."""
@@ -54,6 +60,21 @@ def _feature_schema(features: dict[str, Any]) -> dict[str, str]:
     return schema
 
 
+def _merge_arm_hold_positions(robot: Any, action: dict[str, Any]) -> dict[str, Any]:
+    """Hold arm in place when sending base-only velocity commands.
+
+    LeRobot's ``sync_write`` uses ``next(iter(models))`` and raises ``StopIteration``
+    on an empty motor map, which asyncio surfaces as a cryptic Future error.
+    """
+    has_velocity = any(key.endswith(".vel") for key in action)
+    has_arm_goal = any(key.endswith(".pos") for key in action)
+    if not has_velocity or has_arm_goal:
+        return action
+    arm_pos = robot.bus.sync_read("Present_Position", robot.arm_motors)
+    arm_hold = {f"{name}.pos": value for name, value in arm_pos.items()}
+    return {**arm_hold, **action}
+
+
 @dataclass
 class LeKiwiLocalBridge:
     """On-robot LeKiwi (Feetech bus + cameras)."""
@@ -62,6 +83,7 @@ class LeKiwiLocalBridge:
     robot_id: str = "lekiwi"
     calibration_dir: Path | None = None
     robot_kind: str = "lekiwi"
+    _bus_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def __post_init__(self) -> None:
         from lerobot.robots.lekiwi import LeKiwi, LeKiwiConfig
@@ -81,16 +103,27 @@ class LeKiwiLocalBridge:
 
     def connect(self) -> None:
         logger.info("Connecting local LeKiwi (port=%s id=%s)", self.port, self.robot_id)
-        self._robot.connect()
+        with self._bus_lock:
+            self._robot.connect()
 
     def disconnect(self) -> None:
-        self._robot.disconnect()
+        with self._bus_lock:
+            self._robot.disconnect()
 
     def get_observation(self) -> RobotObservation:
-        return self._robot.get_observation()
+        with self._bus_lock:
+            return self._robot.get_observation()
 
     def send_action(self, action: RobotAction) -> RobotAction:
-        return self._robot.send_action(action)
+        with self._bus_lock:
+            merged = _merge_arm_hold_positions(self._robot, dict(action))
+            return self._robot.send_action(merged)
+
+    def send_base_velocity(self, x_vel: float, y_vel: float, theta_vel: float) -> RobotAction:
+        """Send base velocities while holding the arm at its present pose."""
+        return self.send_action(
+            {"x.vel": float(x_vel), "y.vel": float(y_vel), "theta.vel": float(theta_vel)}
+        )
 
     def observation_features(self) -> dict[str, Any]:
         return _feature_schema(self._robot.observation_features)
@@ -99,7 +132,17 @@ class LeKiwiLocalBridge:
         return _feature_schema(self._robot.action_features)
 
     def stop_base(self) -> None:
-        self._robot.stop_base()
+        with self._bus_lock:
+            self._robot.stop_base()
+
+    def list_cameras(self) -> list[str]:
+        return sorted(self._robot.cameras.keys())
+
+    def camera_video_paths(self) -> dict[str, str | int]:
+        paths: dict[str, str | int] = {}
+        for name, cam in self._robot.cameras.items():
+            paths[name] = getattr(cam.config, "index_or_path", name)
+        return paths
 
 
 @dataclass
@@ -158,6 +201,15 @@ class LeKiwiClientBridge:
         """Map keyboard keys to base velocity commands (LeKiwi client teleop helper)."""
         return self._robot._from_keyboard_to_base_action(pressed_keys)
 
+    def list_cameras(self) -> list[str]:
+        return camera_names_from_features(self.observation_features())
+
+    def camera_video_paths(self) -> dict[str, str | int]:
+        return {
+            name: cfg.index_or_path
+            for name, cfg in self._robot.config.cameras.items()
+        }
+
 
 @dataclass
 class SimLeKiwiBridge:
@@ -211,6 +263,12 @@ class SimLeKiwiBridge:
         self._state["x.vel"] = 0.0
         self._state["y.vel"] = 0.0
         self._state["theta.vel"] = 0.0
+
+    def list_cameras(self) -> list[str]:
+        return []
+
+    def camera_video_paths(self) -> dict[str, str | int]:
+        return {}
 
 
 def build_robot_bridge(
