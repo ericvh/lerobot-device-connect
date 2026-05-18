@@ -181,6 +181,7 @@ trusted network only.
 ## Tests
 
 ```bash
+pip install -e ".[dev,web]"
 python tests/smoke_sim_runtime.py
 pytest tests/
 ```

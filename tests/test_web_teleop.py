@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import pytest
+
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from lerobot_device_connect.web_teleop.app import create_app
 from lerobot_device_connect.web_teleop.session import DirectRobotSession, DirectSessionConfig
-
-pytest.importorskip("fastapi")
 
 
 @pytest.fixture
