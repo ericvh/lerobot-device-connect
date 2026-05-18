@@ -75,6 +75,26 @@ def _merge_arm_hold_positions(robot: Any, action: dict[str, Any]) -> dict[str, A
     return {**arm_hold, **action}
 
 
+def _merge_base_hold_zero(action: dict[str, Any]) -> dict[str, Any]:
+    """Stop the base when sending arm-only position commands (local LeKiwi requirement)."""
+    has_velocity = any(key.endswith(".vel") for key in action)
+    has_arm_goal = any(key.endswith(".pos") for key in action)
+    if has_velocity or not has_arm_goal:
+        return action
+    return {
+        **action,
+        "x.vel": 0.0,
+        "y.vel": 0.0,
+        "theta.vel": 0.0,
+    }
+
+
+def _normalize_lekiwi_action(robot: Any, action: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing arm/base fields so LeRobot ``send_action`` receives a complete dict."""
+    merged = _merge_arm_hold_positions(robot, action)
+    return _merge_base_hold_zero(merged)
+
+
 @dataclass
 class LeKiwiLocalBridge:
     """On-robot LeKiwi (Feetech bus + cameras)."""
@@ -116,7 +136,7 @@ class LeKiwiLocalBridge:
 
     def send_action(self, action: RobotAction) -> RobotAction:
         with self._bus_lock:
-            merged = _merge_arm_hold_positions(self._robot, dict(action))
+            merged = _normalize_lekiwi_action(self._robot, dict(action))
             return self._robot.send_action(merged)
 
     def send_base_velocity(self, x_vel: float, y_vel: float, theta_vel: float) -> RobotAction:
@@ -124,6 +144,12 @@ class LeKiwiLocalBridge:
         return self.send_action(
             {"x.vel": float(x_vel), "y.vel": float(y_vel), "theta.vel": float(theta_vel)}
         )
+
+    def send_arm_positions(self, positions: dict[str, float]) -> RobotAction:
+        """Send arm goal positions while stopping the base."""
+        from lerobot_device_connect.arm_control import build_arm_position_action
+
+        return self.send_action(build_arm_position_action(positions))
 
     def observation_features(self) -> dict[str, Any]:
         return _feature_schema(self._robot.observation_features)
@@ -187,6 +213,11 @@ class LeKiwiClientBridge:
 
     def send_action(self, action: RobotAction) -> RobotAction:
         return self._robot.send_action(action)
+
+    def send_arm_positions(self, positions: dict[str, float]) -> RobotAction:
+        from lerobot_device_connect.arm_control import build_arm_position_action
+
+        return self.send_action(build_arm_position_action(positions))
 
     def observation_features(self) -> dict[str, Any]:
         return _feature_schema(self._robot.observation_features)
@@ -252,6 +283,11 @@ class SimLeKiwiBridge:
             if key in action:
                 self._state[key] = float(action[key])
         return dict(self._state)
+
+    def send_arm_positions(self, positions: dict[str, float]) -> RobotAction:
+        from lerobot_device_connect.arm_control import build_arm_position_action
+
+        return self.send_action(build_arm_position_action(positions))
 
     def observation_features(self) -> dict[str, Any]:
         return {key: "float" for key in self._STATE_KEYS}

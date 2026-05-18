@@ -106,6 +106,8 @@ suggested mitigation if you have one.
 | `get_observation` | Scalar joints / velocities | Information disclosure of robot state |
 | `get_observation_with_cameras` | Scalars + base64 JPEG | Privacy; large payloads (broker DoS) |
 | `stop_base` | Zero base velocities | Safety-relevant; should not be the only guard |
+| `set_arm_positions` / `set_arm_joint` / `nudge_arm_joint` | Arm goal positions (base stopped on local host) | Unbounded joint commands; LeRobot `max_relative_target` may clip |
+| `get_arm_positions` | Arm joint positions | Information disclosure |
 | `state_update` (event) | Scalar stream on change (polled at `LEROBOT_STATE_HZ`) | Disclosure to mesh subscribers when joints/base move |
 | `get_features` / `get_status` | Schema and connectivity | Reconnaissance |
 

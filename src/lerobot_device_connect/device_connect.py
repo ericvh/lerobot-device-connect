@@ -12,6 +12,13 @@ from typing import Any
 from device_connect_edge.drivers import DeviceDriver, emit, periodic, rpc
 from device_connect_edge.types import DeviceIdentity, DeviceStatus
 
+from lerobot_device_connect.arm_control import (
+    arm_config,
+    build_arm_position_action,
+    extract_arm_positions,
+    normalize_arm_joint,
+    parse_arm_position_updates,
+)
 from lerobot_device_connect.base_teleop import (
     BASE_DIRECTIONS,
     DEFAULT_SPEED_LEVELS,
@@ -153,6 +160,73 @@ class LeRobotDeviceDriver(DeviceDriver):
         """Stop the mobile base (LeKiwi omniwheel velocities to zero)."""
         await asyncio.to_thread(self.robot.stop_base)
         return {"status": "success"}
+
+    @rpc()
+    async def get_arm_config(self) -> dict[str, Any]:
+        """Return arm joint names and position keys from the robot action schema."""
+        return {
+            "status": "success",
+            **arm_config(action_features=self.robot.action_features()),
+        }
+
+    @rpc()
+    async def get_arm_positions(self) -> dict[str, Any]:
+        """Return current arm joint positions (no base velocities)."""
+        obs = await asyncio.to_thread(self.robot.get_observation)
+        positions = extract_arm_positions(scalar_observation(obs))
+        return {"status": "success", "positions": positions}
+
+    @rpc()
+    async def set_arm_positions(self, positions: dict[str, float]) -> dict[str, Any]:
+        """Set one or more arm joint goal positions; stops the base by default.
+
+        Args:
+            positions: Joint name → goal position (e.g. ``{"gripper": 50.0}`` or
+                ``{"arm_gripper.pos": 50.0}``).
+        """
+        parsed, unknown = parse_arm_position_updates(positions)
+        if unknown:
+            return {
+                "status": "error",
+                "reason": f"unknown arm joints {unknown}; see get_arm_config",
+            }
+        if not parsed:
+            return {"status": "error", "reason": "positions must not be empty"}
+        sent = await asyncio.to_thread(self._send_arm_positions, parsed)
+        return {
+            "status": "success",
+            "positions": parsed,
+            "action_sent": scalar_observation(sent) if isinstance(sent, dict) else {},
+        }
+
+    @rpc()
+    async def set_arm_joint(self, joint: str, position: float) -> dict[str, Any]:
+        """Set a single arm joint goal position (stops the base)."""
+        normalized = normalize_arm_joint(joint)
+        if normalized is None:
+            config = await self.get_arm_config()
+            return {
+                "status": "error",
+                "reason": f"unknown arm joint {joint!r}; use one of {config['joints']}",
+            }
+        return await self.set_arm_positions({normalized: float(position)})
+
+    @rpc()
+    async def nudge_arm_joint(self, joint: str, delta: float) -> dict[str, Any]:
+        """Move one arm joint relative to its present position."""
+        normalized = normalize_arm_joint(joint)
+        if normalized is None:
+            config = await self.get_arm_config()
+            return {
+                "status": "error",
+                "reason": f"unknown arm joint {joint!r}; use one of {config['joints']}",
+            }
+        obs = await asyncio.to_thread(self.robot.get_observation)
+        current = extract_arm_positions(scalar_observation(obs))
+        if normalized not in current:
+            return {"status": "error", "reason": f"joint {normalized!r} not in observation"}
+        goal = current[normalized] + float(delta)
+        return await self.set_arm_positions({normalized: goal})
 
     @rpc()
     async def get_base_teleop_config(self) -> dict[str, Any]:
@@ -411,6 +485,13 @@ class LeRobotDeviceDriver(DeviceDriver):
         return self.robot.send_action(
             {"x.vel": x_vel, "y.vel": y_vel, "theta.vel": theta_vel},
         )
+
+    def _send_arm_positions(self, positions: dict[str, float]) -> dict[str, float]:
+        """Thread-safe arm motion (stops base on local LeKiwi)."""
+        send_arm = getattr(self.robot, "send_arm_positions", None)
+        if callable(send_arm):
+            return send_arm(positions)
+        return self.robot.send_action(build_arm_position_action(positions))
 
 
 def _load_audio_device_overrides() -> dict[str, str]:

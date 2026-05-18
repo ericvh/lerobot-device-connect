@@ -98,6 +98,11 @@ lerobot-device-connect --portal --portal-credentials ~/Downloads/your-creds.json
 | `get_observation_with_cameras` | Scalars + JPEG camera frames         |
 | `send_action`                  | Motor-space action dict              |
 | `stop_base`                    | Zero omniwheel velocities            |
+| `get_arm_config`               | Arm joint names and position keys    |
+| `get_arm_positions`            | Current arm joint positions          |
+| `set_arm_positions`            | Goal positions for one or more joints |
+| `set_arm_joint`                | Goal position for a single joint     |
+| `nudge_arm_joint`              | Relative move from present position  |
 | `get_base_teleop_config`       | Base drive directions and speed tiers |
 | `set_base_speed_level`         | Set speed tier (0=slow … 2=fast)     |
 | `base_speed_up` / `base_speed_down` | Adjust speed tier               |

@@ -6,7 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from lerobot_device_connect.robot_bridge import _merge_arm_hold_positions
+from lerobot_device_connect.robot_bridge import (
+    _merge_arm_hold_positions,
+    _merge_base_hold_zero,
+)
 
 
 def test_merge_arm_hold_positions_adds_present_arm_pose():
@@ -33,6 +36,21 @@ def test_merge_arm_hold_positions_passthrough_when_arm_in_action():
     action = {"arm_gripper.pos": 1.0, "x.vel": 0.1, "y.vel": 0.0, "theta.vel": 0.0}
     assert _merge_arm_hold_positions(robot, action) == action
     robot.bus.sync_read.assert_not_called()
+
+
+def test_merge_base_hold_zero_adds_stop_when_arm_only():
+    action = {"arm_gripper.pos": 5.0}
+    assert _merge_base_hold_zero(action) == {
+        "arm_gripper.pos": 5.0,
+        "x.vel": 0.0,
+        "y.vel": 0.0,
+        "theta.vel": 0.0,
+    }
+
+
+def test_merge_base_hold_zero_passthrough_when_velocities_present():
+    action = {"arm_gripper.pos": 5.0, "x.vel": 0.1, "y.vel": 0.0, "theta.vel": 0.0}
+    assert _merge_base_hold_zero(action) == action
 
 
 def test_empty_motor_map_raises_stop_iteration():

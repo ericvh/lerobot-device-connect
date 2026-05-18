@@ -24,6 +24,36 @@ async def test_drive_base_forward(driver: LeRobotDeviceDriver) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_arm_config(driver: LeRobotDeviceDriver) -> None:
+    await driver.connect()
+    result = await driver.get_arm_config()
+    assert result["status"] == "success"
+    assert "arm_gripper" in result["joints"]
+    await driver.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_set_arm_joint(driver: LeRobotDeviceDriver) -> None:
+    await driver.connect()
+    result = await driver.set_arm_joint("gripper", 25.0)
+    assert result["status"] == "success"
+    assert result["positions"]["arm_gripper"] == 25.0
+    obs = await driver.get_arm_positions()
+    assert obs["positions"]["arm_gripper"] == 25.0
+    await driver.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_nudge_arm_joint(driver: LeRobotDeviceDriver) -> None:
+    await driver.connect()
+    await driver.set_arm_joint("gripper", 10.0)
+    result = await driver.nudge_arm_joint("gripper", 5.0)
+    assert result["status"] == "success"
+    assert result["positions"]["arm_gripper"] == 15.0
+    await driver.disconnect()
+
+
+@pytest.mark.asyncio
 async def test_set_base_velocity(driver: LeRobotDeviceDriver) -> None:
     await driver.connect()
     result = await driver.set_base_velocity(x_vel=0.05, y_vel=-0.02, theta_vel=10.0)
