@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lerobot-device-connect"
+version = "0.1.0"
+description = "Self-hosted Device Connect driver for Hugging Face LeRobot robots (LeKiwi first)"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "device-connect-edge>=0.2.2",
+  "lerobot>=0.5.0",
+  "numpy>=1.26",
+  "opencv-python-headless>=4.8",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+lerobot-device-connect = "lerobot_device_connect.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+where = ["src"]
